@@ -17,21 +17,42 @@ Database::Database(const std::string& uri) {
     this->CreateTableIfNotExists();
 }
 
+/**
+ * @brief Add a new record to the database
+ * 
+ * @param record The record to be added
+ */
 void Database::AddRecord(const Record& record) {
     const std::string sql("INSERT INTO contacts VALUES (?, ?, ?, ?)");
     sqlite3_stmt* statement;
     sqlite3_prepare_v2(this->ppdb, sql.c_str(), -1, &statement, NULL);
-    sqlite3_bind_text(statement, 1, record.first_name.c_str(), -1,
-                      SQLITE_STATIC);
-    sqlite3_bind_text(statement, 2, record.last_name.c_str(), -1,
-                      SQLITE_STATIC);
-    sqlite3_bind_text(statement, 3, record.email.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(statement, 4, record.telephone.c_str(), -1,
-                      SQLITE_STATIC);
+    Database::BindStatement(record, statement);
     if (sqlite3_step(statement) != SQLITE_DONE) {
         throw DatabaseException("Failed to add the record.");
     }
     sqlite3_finalize(statement);
+}
+
+/**
+ * @brief Search all records matching any of the fields in record.
+ * 
+ * @param record A record containing fields
+ * @return std::vector<Record> The list of matching records
+ */
+std::vector<Record> Database::GetRecords(const Record &record) const {
+    const std::string sql(
+        "SELECT * FROM contacts WHERE first_name = ? OR"
+        " last_name = ? OR email = ? OR telephone = ?"
+        );
+    sqlite3_stmt *statement;
+    sqlite3_prepare_v2(this->ppdb, sql.c_str(), -1, &statement, NULL);
+    this->BindStatement(record, statement);
+    std::vector<Record> records;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        records.push_back(this->GetRecordFromRow(statement));
+    }
+    sqlite3_finalize(statement);
+    return records;
 }
 
 /**
@@ -58,11 +79,62 @@ Record Database::GetRecordByName(const std::string& first_name,
     return record;
 }
 
+/**
+ * @brief Get all records in the database
+ * 
+ * @return std::vector<Record> A vector of records
+ */
 std::vector<Record> Database::GetAllRecords() const {
     std::vector<Record> records;
     sqlite3_exec(this->ppdb, "SELECT * FROM contacts",
                  &(Database::GetAllRecordsCallback), &records, NULL);
     return records;
+}
+
+/**
+ * @brief Deletes all records with matching first name and last name
+ * 
+ * @param first_name The first name
+ * @param last_name The last name
+ * @return int The number of records affected.
+ */
+int Database::DeleteRecord(const std::string &first_name, const std::string &last_name) {
+    std::string query("DELETE FROM contacts WHERE first_name = ? AND last_name = ?");
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(this->ppdb, query.c_str(), -1, &stmt, NULL);
+    Database::BindStatementText(stmt, {first_name, last_name});
+    // sqlite3_bind_text(stmt, 1, first_name.c_str(), -1, SQLITE_STATIC);
+    // sqlite3_bind_text(stmt, 2, last_name.c_str(), -1, SQLITE_STATIC);
+    std::string expanded_sql(sqlite3_expanded_sql(stmt));
+    int status = sqlite3_step(stmt);
+    if (status != SQLITE_DONE) {
+        throw DatabaseException(sqlite3_errstr(status));
+    }
+    int rows_affected = sqlite3_changes(this->ppdb);
+    sqlite3_finalize(stmt);
+    return rows_affected;
+}
+
+/**
+ * @brief Deletes a record that is a full match with `record`
+ * 
+ * @param record The record to be removed from the database
+ * @return int The number of rows affected
+ */
+int Database::DeleteRecord(const Record &record) {
+    // TODO: This function is very similar in steps with DeleteRecord(const std::string, const std::string)
+    //       alter the function so that it is less verbose
+    std::string query("DELETE FROM contacts WHERE first_name = ? AND last_name = ? AND email = ? AND telephone = ?");
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(this->ppdb, query.c_str(), -1, &stmt, NULL);
+    Database::BindStatement(record, stmt);
+    int status = sqlite3_step(stmt);
+    if (status != SQLITE_DONE) {
+        throw DatabaseException(sqlite3_errstr(status));
+    }
+    int rows_affected = sqlite3_changes(this->ppdb);
+    sqlite3_finalize(stmt);
+    return rows_affected;
 }
 
 void Database::CreateTableIfNotExists() {
@@ -119,8 +191,38 @@ int Database::GetAllRecordsCallback(void* arg,
     return 0;
 }
 
+/**
+ * @brief Binds the values in record to statement in order.
+ * 
+ * @param record 
+ * @param stmt A prepared statement with exactly 4 arguments to bind
+ * @return sqlite3_stmt* The statement object
+ */
+sqlite3_stmt *Database::BindStatement(const Record &record, sqlite3_stmt *stmt) {
+    sqlite3_bind_text(stmt, 1, record.first_name.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, record.last_name.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, record.email.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, record.telephone.c_str(), -1, SQLITE_STATIC);
+    return stmt;
+}
+
+
+sqlite3_stmt *Database::BindStatementText(sqlite3_stmt *stmt, std::initializer_list<std::string>  params) {
+    int i = 1;
+    for (auto param: params) {
+        // Error: param runs out of scope when for loop exits,
+        // i.e. deallocated.
+        // Used SQLITE_TRANSIENT so that sqlite3 makes a copy itself
+        // So that the statement won't be invalidated on loop exit
+        sqlite3_bind_text(stmt, i, param.c_str(), -1, SQLITE_TRANSIENT);
+        i++;
+    }
+    std::string s(sqlite3_expanded_sql(stmt));
+    return stmt;
+}
+
 Database::~Database() {
-    int status = sqlite3_close_v2(this->ppdb);
+    sqlite3_close_v2(this->ppdb);
 }
 
 }  // namespace AddressBook

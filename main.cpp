@@ -11,12 +11,15 @@
 using json = nlohmann::json;
 using namespace AddressBook;
 
-void print_record(std::ostream ostream, std::vector<std::string> args) {
-    ostream << "Adding record:\n";
-    ostream << "First name: " << args.at(0);
-    ostream << "Last name: " << args.at(1);
-    ostream << "Email: " << args.at(2);
-    ostream << "Telephone: " << args.at(3);
+void print_records(std::ostream &os, const std::vector<Record> &records) {
+    int i = 1;
+    for (auto record: records) {
+        os << i << ":\n";
+        os << record;
+        os << std::string(30, '-') << '\n';
+        i++;
+    }
+    os << records.size() << " records in total." << std::endl;
 }
 
 int main(int argc, char** argv) {
@@ -33,7 +36,7 @@ int main(int argc, char** argv) {
         auto menu = std::make_unique<cli::Menu>("db_menu");
         menu->Insert(
             "add",
-            {"first name", "last name", "email", "telephone"},
+            {"first_name", "last_name", "email", "telephone"},
             [&](std::ostream &ostream, const std::string &first_name, const std::string &last_name, const std::string &email, const std::string &telephone) {
                 AddressBook::Record myrecord;
                 myrecord.first_name = first_name;
@@ -49,24 +52,43 @@ int main(int argc, char** argv) {
             "list",
             [&](std::ostream &ostream) {
                 auto records = db.GetAllRecords();
-                int i = 1;
-                for (auto record: records) {
-                    ostream << i << ":\n";
-                    ostream << record;
-                    i++;
-                }
-                ostream << records.size() << " records in total." << std::endl;
+                print_records(ostream, records);
             },
             "List all records in the table."
         );
         menu->Insert(
             "get",
+            {"first_name", "last_name"},
             [&](std::ostream &ostream, const std::string &first_name, const std::string &last_name) {
                 AddressBook::Record record = db.GetRecordByName(first_name, last_name);
                 ostream << record;
             },
             "Get a record by a person's first and last name."
             );
+        menu->Insert(
+            "delete_by_name",
+            {"first_name", "last_name"},
+            [&](std::ostream &ostream, const std::string &first_name, const std::string &last_name) {
+                int rows_affected = db.DeleteRecord(first_name, last_name);
+                if (rows_affected == 0) {
+                    ostream << first_name << " " << last_name << " does not exist. Nothing done." << '\n';
+                }
+                ostream << rows_affected << " rows affected." << std::endl;
+            },
+            "Delete records by a person's first and last name."
+        );
+        menu->Insert(
+            "delete",
+            [&](std::ostream &ostream, const std::vector<std::string> &params) {
+                AddressBook::Record record(params);
+                int rows_affected = db.DeleteRecord(record);
+                if (rows_affected == 0) {
+                    ostream << "No records with the specified details exist. Nothing done." << '\n';
+                }
+                ostream << rows_affected << " rows affected." << std::endl;
+            },
+            "Delete records by the details of the record."
+        );
         cli::Cli mycli(std::move(menu));
         cli::CliFileSession file_session(mycli);
         file_session.Start();

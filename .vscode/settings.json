@@ -1,0 +1,10 @@
+{
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "files.associations": {
+        "*.html": "html",
+        "*.cpp": "cpp",
+        "*.txt": "plaintext",
+        "CMakeLists.txt": "cmake",
+        "*.ipp": "cpp"
+    }
+}

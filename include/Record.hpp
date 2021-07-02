@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace AddressBook {
 struct Record {
@@ -10,6 +11,8 @@ struct Record {
     std::string last_name;
     std::string email;
     std::string telephone;
+    Record() = default;
+    Record(const std::vector<std::string> &params);
 };
 std::ostream& operator<<(std::ostream& os, Record record);
 }  // namespace AddressBook
