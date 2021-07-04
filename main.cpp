@@ -117,7 +117,8 @@ int main(int argc, char** argv) {
                     os << "Record #" << id << " does not exist." << '\n';
                 }
                 os << rows_affected << " rows affected." << std::endl;
-            }
+            },
+            "Deletes a record by its id."
         );
         menu->Insert(
             "delete_by_name",
