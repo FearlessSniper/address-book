@@ -6,7 +6,7 @@ if (MSVC)
 else()
     find_package(SQLite3 REQUIRED)
 endif()
-find_package(SQLite3 REQUIRED NAMES unofficial-sqlite3)
+# find_package(SQLite3 REQUIRED NAMES unofficial-sqlite3)
 add_library(lib_address_book ${ADDRESS_BOOK_SOURCES})
 target_include_directories(
     lib_address_book PUBLIC ${PROJECT_SOURCE_DIR}/include
