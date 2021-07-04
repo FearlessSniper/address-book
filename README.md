@@ -10,10 +10,15 @@ MSYS (MinGW):
 ```Shell
 pacman -S mingw-w64-x86_64-nlohmann-json mingw-w64-x86_64-sqlite3 mingw-w64-x86_64-cmake
 ```
-VCpkg (Visual C++):
+vcpkg (Visual C++):
 ```Shell
 vcpkg install sqlite3:x64-windows nlohmann-json:x64-windows
 ```
+APT (Ubuntu / Debian)[^1]:
+```Shell
+apt install nlohmann-json3-dev libsqlite3-dev
+```
+
 ### Building
 ```Shell
 mkdir build
@@ -37,3 +42,5 @@ address-book
 ./address-book
 ```
 For a demo example, see [DEMO.md](DEMO.md)
+
+[^1]: On older versions of CMake, the script `FindSqlite3.cmake` might be non-existent, which makes CMake failing to find the sqlite3 library. You will have update to a newer version or load the script manually.
