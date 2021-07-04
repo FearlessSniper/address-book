@@ -9,6 +9,7 @@ namespace AddressBook {
      * @return std::ostream& The output stream
      */
     std::ostream& operator<<(std::ostream& os, Record record) {
+        os << "#" << record.id << ":\n";
         os << "First name: " << record.first_name << "\n";
         os << "Last name: " << record.last_name << "\n";
         os << "Email: " << record.email << "\n";

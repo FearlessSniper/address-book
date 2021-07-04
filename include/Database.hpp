@@ -13,6 +13,9 @@ class Database {
     std::vector<Record> GetAllRecords() const;
     int DeleteRecord(const std::string &first_name, const std::string &last_name);
     int DeleteRecord(const Record &record);
+    int DeleteRecord(int rowid);
+    int UpdateRecord(int rowid, const Record& record) const;
+    void ClearRecords();
     ~Database();
 
    private:

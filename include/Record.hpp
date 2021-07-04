@@ -7,6 +7,7 @@
 
 namespace AddressBook {
 struct Record {
+    int id = -1;
     std::string first_name;
     std::string last_name;
     std::string email;

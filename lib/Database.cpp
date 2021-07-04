@@ -41,7 +41,7 @@ void Database::AddRecord(const Record& record) {
  */
 std::vector<Record> Database::GetRecords(const Record &record) const {
     const std::string sql(
-        "SELECT * FROM contacts WHERE first_name = ? OR"
+        "SELECT *, ROWID FROM contacts WHERE first_name = ? OR"
         " last_name = ? OR email = ? OR telephone = ?"
         );
     sqlite3_stmt *statement;
@@ -49,7 +49,9 @@ std::vector<Record> Database::GetRecords(const Record &record) const {
     this->BindStatement(record, statement);
     std::vector<Record> records;
     while (sqlite3_step(statement) == SQLITE_ROW) {
-        records.push_back(this->GetRecordFromRow(statement));
+        auto record = this->GetRecordFromRow(statement);
+        record.id = sqlite3_column_int(statement, 5);
+        records.push_back(record);
     }
     sqlite3_finalize(statement);
     return records;
@@ -60,13 +62,13 @@ std::vector<Record> Database::GetRecords(const Record &record) const {
  *
  * @param first_name The first name
  * @param last_name The last name
- * @return Record A record containing first_name, last_name, email, telephone
+ * @return Record A record containing first_name, last_name, email, telephone, id
  * An empty record if not found.
  */
 Record Database::GetRecordByName(const std::string& first_name,
                                  const std::string& last_name) const {
     const std::string sql(
-        "SELECT * FROM contacts WHERE first_name = ? AND last_name = ?");
+        "SELECT *, ROWID FROM contacts WHERE first_name = ? AND last_name = ?");
     sqlite3_stmt* statement;
     sqlite3_prepare_v2(this->ppdb, sql.c_str(), -1, &statement, NULL);
     sqlite3_bind_text(statement, 1, first_name.c_str(), -1, NULL);
@@ -74,6 +76,7 @@ Record Database::GetRecordByName(const std::string& first_name,
     Record record;
     if (sqlite3_step(statement) == SQLITE_ROW) {
         record = this->GetRecordFromRow(statement);
+        record.id = sqlite3_column_int(statement, 4);
     }
     sqlite3_finalize(statement);
     return record;
@@ -86,7 +89,7 @@ Record Database::GetRecordByName(const std::string& first_name,
  */
 std::vector<Record> Database::GetAllRecords() const {
     std::vector<Record> records;
-    sqlite3_exec(this->ppdb, "SELECT * FROM contacts",
+    sqlite3_exec(this->ppdb, "SELECT *, ROWID FROM contacts",
                  &(Database::GetAllRecordsCallback), &records, NULL);
     return records;
 }
@@ -124,7 +127,10 @@ int Database::DeleteRecord(const std::string &first_name, const std::string &las
 int Database::DeleteRecord(const Record &record) {
     // TODO: This function is very similar in steps with DeleteRecord(const std::string, const std::string)
     //       alter the function so that it is less verbose
-    std::string query("DELETE FROM contacts WHERE first_name = ? AND last_name = ? AND email = ? AND telephone = ?");
+    std::string query(
+        "DELETE FROM contacts WHERE first_name = ? "
+        "AND last_name = ? AND email = ? AND telephone = ?"
+    );
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(this->ppdb, query.c_str(), -1, &stmt, NULL);
     Database::BindStatement(record, stmt);
@@ -137,13 +143,67 @@ int Database::DeleteRecord(const Record &record) {
     return rows_affected;
 }
 
+/**
+ * @brief Deletes a record by rowid
+ * @param rowid The rowid of the target record
+ * @return The number of rows affected. Generally either 0 or 1.
+*/
+int Database::DeleteRecord(int rowid) {
+    const std::string sql("DELETE FROM contacts WHERE ROWID = ?");
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(this->ppdb, sql.c_str(), -1, &stmt, nullptr);
+    sqlite3_bind_int(stmt, 1, rowid);
+    sqlite3_step(stmt);
+    int rows_affected = sqlite3_changes(this->ppdb);
+    sqlite3_finalize(stmt);
+    return rows_affected;
+}
+
+/**
+ * @brief Updates a record by its rowid
+ * @param rowid The id identifying the record
+ * @param record The record to be updated
+ * @return The number of rows affected. Generally either 0 or 1.
+*/
+int Database::UpdateRecord(int rowid, const Record& record) const
+{
+    const std::string query(
+        "UPDATE contacts SET first_name = ?, last_name = ?,"
+        " email = ?, telephone = ? WHERE ROWID = ?"
+    );
+    sqlite3_stmt* stmt;
+    sqlite3_prepare_v2(this->ppdb, query.c_str(), -1, &stmt, NULL);
+    Database::BindStatement(record, stmt);
+    sqlite3_bind_int(stmt, 5, rowid);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return sqlite3_changes(this->ppdb);
+    
+}
+
+/**
+ * @brief Removes all records from the database.
+ * @return The number of records removed.
+*/
+void Database::ClearRecords()
+{
+    // Drop the table and create a new one
+    const std::string sql("DROP TABLE contacts");
+    int status_code = sqlite3_exec(
+        this->ppdb, sql.c_str(), nullptr, nullptr, nullptr);
+    if (status_code != SQLITE_OK) {
+        throw DatabaseException(sqlite3_errstr(status_code));
+    }
+    this->CreateTableIfNotExists();
+}
+
 void Database::CreateTableIfNotExists() {
     // sqlite3_stmt *statement;
     // sqlite3_prepare_v2(this->ppdb, this->table_def.c_str(), -1, &statement,
     // NULL);
     int status =
         sqlite3_exec(this->ppdb, this->table_def.c_str(), NULL, NULL, NULL);
-    if (status != 0) {
+    if (status != SQLITE_OK) {
         throw DatabaseException(sqlite3_errstr(status));
     }
 }
@@ -187,6 +247,7 @@ int Database::GetAllRecordsCallback(void* arg,
     record.last_name = colv[1];
     record.email = colv[2];
     record.telephone = colv[3];
+    record.id = std::stoi(colv[4]);
     pvec->push_back(record);
     return 0;
 }
